@@ -3,13 +3,38 @@
 import sys
 from typing import Dict, List, Tuple
 
-from .common import load_spacy_model
-from .types import Gloss
+import functools
+
+from typing import List, Tuple, Optional
+
+
+
+Gloss = List[Tuple[Optional[str], str]]
 
 LANGUAGE_MODELS_RULES = {
-    "de": "de_core_news_lg",
     "fr": "fr_core_news_lg"
 }
+
+
+
+
+@functools.lru_cache(maxsize=None)
+def load_spacy_model(model_name: str, disable: Optional[Tuple[str, ...]] = None):
+    try:
+        import spacy
+    except ImportError:
+        raise ImportError("Please install spacy. pip install spacy")
+
+    if disable is None:
+        disable = []
+
+    try:
+        return spacy.load(model_name, disable=disable)
+    except OSError:
+        print(f"{model_name} not found. Downloading...")
+        import spacy.cli
+        spacy.cli.download(model_name)
+        return spacy.load(model_name, disable=disable)
 
 
 def print_token(token):
@@ -55,8 +80,6 @@ def get_clauses(tokens):
 
 def reorder_sub_main(clauses):
     # find which clause is the subordinate
-    # wenn KOUS ->cp-> benötigen ->mo-> Suchen: MAIN-SUBwenn to be reordered as SUBwenn-MAIN+dann?
-    # Wenn KOUS ->cp-> benötigen ->re-> dann: already ordered as SUBwenn-MAINdann
     sub_clause = -1
     main_clause = -1
     main_verb = None
@@ -163,7 +186,7 @@ def reorder_svo_triplets(clause, word_order='sov'):
     pairs = []
     for token in clause:
         # print_token(token)
-        if token.dep_ in {"sb", "oa",  # DE
+        if token.dep_ in {
                           "nsubj", "obj", "obl:arg",  # FR
                           }:
             pairs.append((token, token.head))
@@ -198,24 +221,6 @@ def reorder_svo_triplets(clause, word_order='sov'):
     return clause
 
 
-def haben_main_verb(token):
-    if token.lemma_ == "haben":
-        # is there a dependent main verb?
-        for c in token.children:
-            if c.pos_ == "VERB" and c.dep_ == "oc":
-                return False
-        return True
-
-    return False
-
-
-def gloss_de_poss_pronoun(token):
-    # DE: mein/dein/sein/ihr/Ihr/unser/euer
-    pposat_map = {'M': 'mein', 'm': 'mein', 'D': 'dein', 'd': 'dein', 'S': 'sein', 's': 'sein', 'i': 'ihr',
-                  'I': 'Ihr', 'U': 'unser', 'u': 'unser', 'E': 'euer', 'e': 'euer'}
-
-    # return 'IX-'+pposat_map[token.text[0]]
-    return '(' + pposat_map[token.text[0]] + ')'
 
 
 def glossify(tokens) -> List[str]:
@@ -235,24 +240,19 @@ def glossify(tokens) -> List[str]:
         elif t.pos_ == 'ADV':
             gloss = t.text.lower()
 
-        # mark German attributive possessive pronouns: put the base form in parentheses, e.g. (mein)
-        elif t.tag_ == "PPOSAT":
-            gloss = gloss_de_poss_pronoun(t)
+
 
         # lowercased word form for pronouns since the lemma sometimes looses the person information
-        elif t.tag_ in ['PPER', 'PRF', 'PDS',  # DE, e.g. "Wir  ich PRON PPER ..."
+        elif t.tag_ in [
                         'PRON', 'DET',  # FR, e.g. "sa  son DET DET ..."
                         ]:
             gloss = t.text.lower() + '-IX'
 
-        # DE "haben" as main verb should be glossed as "DA"
-        elif haben_main_verb(t):
-            gloss = "da"
 
         # other forms of "haben" and "sein" (auxiliary) should be skipped
         # FR: avons  avoir AUX AUX aux:tense
-        elif (t.lemma_ in {"habe", "haben", "sein"}  # DE
-              or (t.lemma_ == "avoir" and t.pos_ == "AUX")):  # FR
+        elif (t.lemma_ in
+               (t.lemma_ == "avoir" and t.pos_ == "AUX")):  # FR
             continue
 
         # DE: lemma of NER-identified location entities preceded by preposition
@@ -301,28 +301,6 @@ def clause_to_gloss(clause, lang: str, punctuation=False) -> Tuple[List[str], Li
     negations = [t for t in tokens if t.dep_ == "ng"]
     tokens = [t for t in tokens if t not in negations] + negations
 
-    if len(tokens) > 0 and lang == "de":
-        from spacy.tokens import Token
-
-        token = tokens[0]
-        extra_token_id = len(token.doc)
-
-        neg_token = Token(token.vocab, token.doc, extra_token_id)
-        neg_token.lemma_ = "<neg>"
-        extra_token_id += 1
-
-        neg_close_token = Token(token.vocab, token.doc, extra_token_id)
-        neg_close_token.lemma_ = "</neg>"
-        extra_token_id += 1
-
-        for token in list(tokens):
-            if token.dep_ == "ng":
-                tokens.insert(0, neg_token)
-                tokens.remove(token)
-                tokens.append(neg_close_token)
-            elif token.lemma_ == "kein":
-                tokens.insert(tokens.index(token), neg_token)
-                tokens.append(neg_close_token)
 
     # TODO: is compound splitting necessary? only taking the first noun loses information!
     # Rule 6: Replace compound nouns with the first noun

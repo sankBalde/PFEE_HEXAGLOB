@@ -1,2 +1,3 @@
 spacy
 nltk
+pose-format
