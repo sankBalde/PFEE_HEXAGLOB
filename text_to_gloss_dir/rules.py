@@ -1,5 +1,3 @@
-# originally written by Anne Goehring
-# adapted by Mathias Müller
 import sys
 from typing import Dict, List, Tuple
 
@@ -251,8 +249,7 @@ def glossify(tokens) -> List[str]:
 
         # other forms of "haben" and "sein" (auxiliary) should be skipped
         # FR: avons  avoir AUX AUX aux:tense
-        elif (t.lemma_ in
-               (t.lemma_ == "avoir" and t.pos_ == "AUX")):  # FR
+        elif t.lemma_ == "avoir" and t.pos_ == "AUX":  # FR
             continue
 
         # DE: lemma of NER-identified location entities preceded by preposition
