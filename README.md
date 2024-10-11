@@ -16,7 +16,7 @@
 ## 2. Transformateur de Videos .webm en .pose
 - Les videos sont prises du dataset : `https://github.com/parlr/lsf-data/tree/master`
 - Transformation des videos .webm en .mp4
-- Lancer la commande `videos_to_poses --format mediapipe --directory /path/to/videos` pour convertir du .mp4 en .pose
+- Lancer la commande `python filter_data_AND_convert_in_pose/video_pose.py --format mediapipe -i converted_videos_mp4/elix/achat.mp4 -o achat.pose` pour convertir du .mp4 en .pose
 - Ecriture des mots avec leur path pose et gloss respectifs dans un csv
 
 
