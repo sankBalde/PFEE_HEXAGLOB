@@ -1,106 +1,113 @@
 import cv2
 import mediapipe as mp
-import os
-import json
 
-def save_mediapipe_pose_from_video(video_path: str, output_directory: str):
-    """
-    Process a video file and save the face, pose, and hand landmarks as JSON files for each frame.
+# Initialiser MediaPipe Holistic
+mp_holistic = mp.solutions.holistic
+mp_drawing = mp.solutions.drawing_utils
 
-    Parameters
-    ----------
-    video_path : str
-        Path to the input video file.
-    output_directory : str
-        Directory where the landmark data will be saved.
-    """
-    # Initialize Mediapipe Holistic model
-    mp_holistic = mp.solutions.holistic
-    holistic = mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+# Indices des landmarks à extraire
+FACE_LANDMARKS = ['0', '7', '10', '13', '14', '17', '21', '33', '37', '39', '40', '46', '52', '53', '54', '55', '58',
+                  '61', '63', '65', '66', '67', '70', '78', '80', '81', '82', '84', '87', '88', '91', '93', '95',
+                  '103', '105', '107', '109', '127', '132', '133', '136', '144', '145', '146', '148', '149', '150',
+                  '152', '153', '154', '155', '157', '158', '159', '160', '161', '162', '163', '172', '173', '176',
+                  '178', '181', '185', '191', '234', '246', '249', '251', '263', '267', '269', '270', '276', '282',
+                  '283', '284', '285', '288', '291', '293', '295', '296', '297', '300', '308', '310', '311', '312',
+                  '314', '317', '318', '321', '323', '324', '332', '334', '336', '338', '356', '361', '362', '365',
+                  '373', '374', '375', '377', '378', '379', '380', '381', '382', '384', '385', '386', '387', '388',
+                  '389', '390', '397', '398', '400', '402', '405', '409', '415', '454', '466']
+# Fonction pour extraire les landmarks
+def extract_landmarks(results):
+    landmarks = {
+        "face": [],
+        "left_hand": [],
+        "right_hand": [],
+        "body": []
+    }
 
-    FACE_LANDMARKS = [33, 133, 160, 159, 158, 157, 173, 144, 145, 153, 154, 155, # Oeil gauche
-                        362, 263, 387, 386, 385, 384, 373, 380, 381, 382, 383, 362,  # Oeil droit
-                            70, 63, 105, 66, 107, 55, 46, 53, 52,  # Sourcil gauche
-                            336, 296, 334, 293, 300, 285, 276, 283, 282,  # Sourcil droit
-                            61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 95, 88, 178,
-                  87, 14, 317, 402, 318, 324, 308, 415, 375, 321, 405, 314, 17, 84, 181, 91, 146] # Bouche
-    FACEMESH_CONTOURS_POINTS = [
-        p for p in sorted(set([p for p_tup in list(mp_holistic.FACEMESH_CONTOURS) for p in p_tup]))
-    ]
-    for i in FACEMESH_CONTOURS_POINTS:
-        FACE_LANDMARKS.append(i)
+    # Extraire les landmarks du visage
+    if results.face_landmarks:
+        landmarks["face"] = [(results.face_landmarks.landmark[i].x,
+                              results.face_landmarks.landmark[i].y, results.face_landmarks.landmark[i].z) for i in FACE_LANDMARKS]
 
-    # Open the video file
+    # Extraire les landmarks des mains
+    if results.left_hand_landmarks:
+        landmarks["left_hand"] = [(lm.x, lm.y, lm.z) for lm in results.left_hand_landmarks.landmark]
+
+    if results.right_hand_landmarks:
+        landmarks["right_hand"] = [(lm.x, lm.y, lm.z) for lm in results.right_hand_landmarks.landmark]
+
+    ignore_list = [8, 6, 5, 4, 1, 2, 3, 7, 0, 10, 9]
+    # Extraire les landmarks du corps (pose) en ignorant les indices dans ignore_list
+    if results.pose_landmarks:
+        landmarks["body"] = [
+            (lm.x, lm.y, lm.z) for idx, lm in enumerate(results.pose_landmarks.landmark) if idx not in ignore_list
+        ]
+
+    return landmarks
+
+
+# Fonction principale pour capturer les landmarks à partir d'un fichier vidéo
+def get_landmarks_from_video(video_path):
+    # Ouvrir le fichier vidéo
     cap = cv2.VideoCapture(video_path)
+    landmarks_list = []
 
-    if not cap.isOpened():
-        print(f"Error: Unable to open video file {video_path}")
-        return
+    # Initialiser l'objet Holistic de MediaPipe
+    with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
+        while cap.isOpened():
+            ret, frame = cap.read()
 
-    # Create the output directory if it doesn't exist
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
+            if not ret:
+                break
 
-    frame_id = 0
-    while cap.isOpened():
-        ret, frame = cap.read()
+            # Convertir l'image en RGB car MediaPipe utilise des images RGB
+            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        if not ret:
-            print("Finished processing video.")
-            break
+            # Traiter l'image pour obtenir les landmarks
+            results = holistic.process(image_rgb)
 
-        # Convert the image from BGR to RGB for Mediapipe processing
-        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image_rgb.flags.writeable = False  # Improves performance
+            # Revenir à l'image en BGR pour l'affichage avec OpenCV
+            image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
 
-        # Process the frame with Mediapipe Holistic
-        results = holistic.process(image_rgb)
+            # Extraire les landmarks
+            landmarks = extract_landmarks(results)
+            landmarks_list.append(landmarks)
 
-        # Only save if landmarks for face, pose, and hands are detected
-        if results.face_landmarks and results.pose_landmarks and results.left_hand_landmarks and results.right_hand_landmarks:
-            # Extract landmarks for face, pose, and hands
+            # Afficher les landmarks du visage simplifiés
+            for point in landmarks["face"]:
+                x = int(point[0] * frame.shape[1])
+                y = int(point[1] * frame.shape[0])
+                cv2.circle(image_bgr, (x, y), 3, (0, 255, 0), -1)
 
-            face_landmarks = [(results.face_landmarks.landmark[i].x,
-                                           results.face_landmarks.landmark[i].y, results.face_landmarks.landmark[i].z)
-                                          for i in FACE_LANDMARKS]
-            #face_landmarks = [[lm.x, lm.y, lm.z] for lm in results.face_landmarks.landmark]
-            pose_landmarks = [[lm.x, lm.y, lm.z] for lm in results.pose_landmarks.landmark]
-            left_hand_landmarks = [[lm.x, lm.y, lm.z] for lm in results.left_hand_landmarks.landmark]
-            right_hand_landmarks = [[lm.x, lm.y, lm.z] for lm in results.right_hand_landmarks.landmark]
+            # Afficher les landmarks du corps simplifiés
+            for point in landmarks["body"]:
+                x = int(point[0] * frame.shape[1])
+                y = int(point[1] * frame.shape[0])
+                cv2.circle(image_bgr, (x, y), 3, (0, 255, 0), -1)
 
-            # Save the landmarks for the current frame
-            frame_data = {
-                "face_landmarks": {
-                    "num_landmarks": len(face_landmarks),
-                    "landmarks": [",".join(map(str, lm)) for lm in face_landmarks]
-                },
-                "pose_landmarks": {
-                    "num_landmarks": len(pose_landmarks),
-                    "landmarks": [",".join(map(str, lm)) for lm in pose_landmarks]
-                },
-                "left_hand_landmarks": {
-                    "num_landmarks": len(left_hand_landmarks),
-                    "landmarks": [",".join(map(str, lm)) for lm in left_hand_landmarks]
-                },
-                "right_hand_landmarks": {
-                    "num_landmarks": len(right_hand_landmarks),
-                    "landmarks": [",".join(map(str, lm)) for lm in right_hand_landmarks]
-                }
-            }
+            # Afficher les landmarks des mains simplifiés
+            for point in landmarks["left_hand"]:
+                x = int(point[0] * frame.shape[1])
+                y = int(point[1] * frame.shape[0])
+                cv2.circle(image_bgr, (x, y), 3, (0, 255, 0), -1)
 
-            # Save the frame data as a JSON file
-            output_path = os.path.join(output_directory, f"{frame_id:04d}.json")
-            with open(output_path, 'w') as f:
-                json.dump(frame_data, f, indent=4)
+            for point in landmarks["right_hand"]:
+                x = int(point[0] * frame.shape[1])
+                y = int(point[1] * frame.shape[0])
+                cv2.circle(image_bgr, (x, y), 3, (0, 255, 0), -1)
 
-            frame_id += 1
-            print(f"Processed frame {frame_id}")
+            # Afficher l'image avec les landmarks
+            cv2.imshow('Holistic Landmarks', image_bgr)
 
-    # Release the video capture and Mediapipe resources
+            # Quitter si la touche 'q' est pressée
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+    # Libérer la capture et fermer les fenêtres
     cap.release()
-    holistic.close()
+    cv2.destroyAllWindows()
 
-    print("All frames processed and landmarks saved.")
 
-# Example usage:
-save_mediapipe_pose_from_video("tmp/bonjour-3.mp4", "bonjour_output_landmarks")
+if __name__ == "__main__":
+    video_path = "tmp/bonjour-3.mp4"
+    get_landmarks_from_video(video_path)
