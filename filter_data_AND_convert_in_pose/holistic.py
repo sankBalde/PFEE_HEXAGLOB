@@ -5,6 +5,7 @@ from pose_format.numpy.pose_body import NumPyPoseBody
 from pose_format import Pose
 from pose_format.pose_header import PoseHeader, PoseHeaderComponent, PoseHeaderDimensions
 from pose_format.utils.openpose import hand_colors
+from person_detection import detection_person_frame
 
 
 try:
@@ -19,6 +20,7 @@ FACEMESH_CONTOURS_POINTS = [
 ]
 
 BODY_POINTS = mp_holistic.PoseLandmark._member_names_
+
 BODY_LIMBS = [(int(a), int(b)) for a, b in mp_holistic.POSE_CONNECTIONS]
 
 
@@ -189,11 +191,18 @@ def body_points(component, width: int, height: int, num: int):
     tuple of np.array
         coordinates and visibility for each landmark.
     """
+    #BODY_POINTS = [11, 12, 14, 16, 13, 15, 24, 23]
+
+    #size = len(BODY_POINTS)
     if component is not None:
         lm = component.landmark
+        #fLm = [(lm[i].x * width, lm[i].y * height, lm[i].z) for i in BODY_POINTS]
+
         return np.array([[p.x * width, p.y * height, p.z] for p in lm]), np.array([p.visibility for p in lm])
+        #return np.array(fLm), np.ones(size)
 
     return np.zeros((num, 3)), np.zeros(num)
+    #return np.zeros((size, 3)), np.zeros(size)
 
 
 
@@ -238,23 +247,23 @@ def process_holistic(frames: list,
         datas = []
         confs = []
 
+        #from ultralytics import YOLO
+
+        #model = YOLO('yolov8s.pt')
 
         for i, frame in enumerate(tqdm(frames, disable=not progress)):
+            #frame = detection_person_frame(model, frame) #some yolov person detection
             results = holistic.process(frame)
 
             body_data, body_confidence = body_points(results.pose_landmarks, w, h, 33)
-            #print("face points num : ", FACE_POINTS_NUM(additional_face_points))
-            """face_data, face_confidence = component_points(results.face_landmarks, w, h,
-                                                          FACE_POINTS_NUM(additional_face_points))"""
             face_data, face_confidence = component_points_face(results.face_landmarks, w, h,
                                                           FACE_POINTS_NUM(additional_face_points))
 
             lh_data, lh_confidence = component_points(results.left_hand_landmarks, w, h, 21)
             rh_data, rh_confidence = component_points(results.right_hand_landmarks, w, h, 21)
-            body_world_data, body_world_confidence = body_points(results.pose_world_landmarks, w, h, 33)
-
-            data = np.concatenate([body_data, face_data, lh_data, rh_data, body_world_data])
-            conf = np.concatenate([body_confidence, face_confidence, lh_confidence, rh_confidence, body_world_confidence])
+            data = np.concatenate([body_data, face_data, lh_data, rh_data])
+            conf = np.concatenate(
+                [body_confidence, face_confidence, lh_confidence, rh_confidence])
 
             if kinect is not None:
                 kinect_depth = []
@@ -359,14 +368,13 @@ def holistic_components(pf="XYZC", additional_face_points=0):
                   (96, 80), (94, 91), (73, 75), (74, 96), (75, 73), (108, 102), (88, 87), (97, 81), (79, 124), (11, 13),
                   (19, 20), (82, 96), (80, 84), (117, 68), (27, 62), (81, 97), (98, 2), (17, 43), (96, 74), (68, 76),
                   (10, 63)]
-    #print("Len face points from video", len(FACE_POINTS(additional_face_points)))
-
     return [
         PoseHeaderComponent(name="POSE_LANDMARKS",
                             points=BODY_POINTS,
                             limbs=BODY_LIMBS,
                             colors=[(255, 0, 0)],
                             point_format=pf),
+
         PoseHeaderComponent(name="FACE_LANDMARKS",
                             #points=FACE_POINTS(additional_face_points),
                             points=FACE_LANDMARKS,
@@ -375,11 +383,8 @@ def holistic_components(pf="XYZC", additional_face_points=0):
                             point_format=pf),
         holistic_hand_component("LEFT_HAND_LANDMARKS", pf),
         holistic_hand_component("RIGHT_HAND_LANDMARKS", pf),
-        PoseHeaderComponent(name="POSE_WORLD_LANDMARKS",
-                            points=BODY_POINTS,
-                            limbs=BODY_LIMBS,
-                            colors=[(255, 0, 0)],
-                            point_format=pf),
+
+
     ]
 
 
@@ -416,7 +421,7 @@ def load_holistic(frames: list,
     Returns
     -------
     Pose
-        Loaded pose data with header and body 
+        Loaded pose data with header and body
     """
     pf = "XYZC" if kinect is None else "XYZKC"
 

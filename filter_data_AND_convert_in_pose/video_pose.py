@@ -4,6 +4,7 @@ import cv2
 from holistic import load_holistic
 import argparse
 
+
 def load_video_frames(cap: cv2.VideoCapture):
     while True:
         ret, frame = cap.read()
