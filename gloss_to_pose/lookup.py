@@ -3,8 +3,12 @@ from collections import defaultdict
 from typing import List
 
 from pose_format import Pose
+from typing import List, Tuple, Optional
 
-from spoken_to_signed.text_to_gloss.types import Gloss
+#from spoken_to_signed.text_to_gloss.types import Gloss
+#from ..text_to_gloss_dir.rules import text_to_gloss
+
+Gloss = List[Tuple[Optional[str], str]]
 
 
 class PoseLookup:

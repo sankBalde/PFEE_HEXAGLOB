@@ -4,7 +4,7 @@ import numpy as np
 from pose_format import Pose
 from pose_format.utils.generic import reduce_holistic, correct_wrists, pose_normalization_info
 
-from .smoothing import smooth_concatenate_poses
+from smoothing import smooth_concatenate_poses
 
 
 def normalize_pose(pose: Pose) -> Pose:
