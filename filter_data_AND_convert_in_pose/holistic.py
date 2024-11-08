@@ -213,7 +213,7 @@ def process_holistic(frames: list,
                      kinect=None,
                      progress=False,
                      additional_face_points=0,
-                     additional_holistic_config={}) -> NumPyPoseBody:
+                     additional_holistic_config={}, first_frame_to_stop=50) -> NumPyPoseBody:
     """
     process frames using holistic model from mediapipe
 
@@ -251,9 +251,18 @@ def process_holistic(frames: list,
 
         #model = YOLO('yolov8s.pt')
 
+
         for i, frame in enumerate(tqdm(frames, disable=not progress)):
             #frame = detection_person_frame(model, frame) #some yolov person detection
             results = holistic.process(frame)
+            # Vérifie si aucun landmark n'est détecté
+            if (results.pose_landmarks is None or
+                    results.face_landmarks is None or
+                    results.left_hand_landmarks is None or
+                    results.right_hand_landmarks is None) and i > first_frame_to_stop:
+                print("Aucun landmark détecté, arrêt du traitement.")
+                break  # Arrête le traitement des frames
+
 
             body_data, body_confidence = body_points(results.pose_landmarks, w, h, 33)
             face_data, face_confidence = component_points_face(results.face_landmarks, w, h,
@@ -278,8 +287,7 @@ def process_holistic(frames: list,
 
             datas.append(data)
             confs.append(conf)
-        # Trouver la forme maximale dans datas
-        #max_shape = np.max([data.shape for data in datas], axis=0)
+
 
         # Compléter les matrices plus petites avec des zéros
         """datas_padded = [
