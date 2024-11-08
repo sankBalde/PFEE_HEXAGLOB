@@ -19,4 +19,10 @@
 - Lancer la commande `python filter_data_AND_convert_in_pose/video_pose.py --format mediapipe -i converted_videos_mp4/elix/achat.mp4 -o achat.pose` pour convertir du .mp4 en .pose
 - Ecriture des mots avec leur path pose et gloss respectifs dans un csv
 
+## 3. Concatenation de Pose
+- Voir le dossier `gloss_to_pose`
+  - Un dossier test de poses existe: `pose_test`
+  - Pour lancer le test: `python main.py`
+  - Pour visualiser le test: `python ../filter_data_AND_convert_in_pose/pose_visualisation.py -i ecole_aller.pose -o ecole_aller.mp4`
+
 
